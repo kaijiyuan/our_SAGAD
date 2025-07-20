@@ -1,0 +1,150 @@
+default:
+  lr: 0.01
+  wd: 0.0
+  epochs: 500
+  dropout: 0.0
+  patience: 50
+  hid_dims: [32, 32]
+  conv_norm: none
+  mlp_norm: none  # none, batch, layer
+  feat_trans: no  # no, l1, l2, bt, row normalized features
+  activation: ReLU  # ReLU, ELU, PReLU, Tanh, Identity, ...
+  num_gate_layers: 2
+  k: [ 2, 2 ]
+  K: 5
+  p: [ 0.5, 0.5 ]
+
+reddit:
+  lr: 0.01
+  wd: 0.0001
+  epochs: 500
+  dropout: 0.0
+  hid_dims: [ 32, 32 ]
+  conv_norm: none
+  mlp_norm: none
+  feat_trans: no
+  activation: ReLU
+  num_gate_layers: 1
+  K: 5
+  p: [0.8, 1.]
+
+weibo:
+  lr: 0.1
+  wd: 0.000
+  epochs: 500
+  dropout: 0.0
+  hid_dims: [ 128, 128 ]
+  conv_norm: none
+  mlp_norm: none
+  feat_trans: l1
+  activation: ReLU
+  num_gate_layers: 2
+  K: 5
+  p: [ 1., 1. ]
+
+amazon:
+  lr: 0.01
+  wd: 0.000
+  epochs: 500
+  dropout: 0.0
+  hid_dims: [32]
+  conv_norm: none
+  mlp_norm: none
+  feat_trans: no
+  activation: Identity
+  num_gate_layers: 1
+  K: 5
+  p: [0.1, 0.8]
+
+
+yelp:
+  lr: 0.01
+  wd: 0.0001
+  epochs: 500
+  dropout: 0.1
+  hid_dims: [ 32 ]
+  mlp_norm: none
+  feat_trans: no
+  activation: ReLU
+  num_gate_layers: 2
+  K: 5
+  p: [0.4, 1.]
+
+tfinance:
+  lr: 0.01
+  wd: 0.0001
+  epochs: 500
+  dropout: 0.0
+  hid_dims: [ 32 ]
+  mlp_norm: none
+  feat_trans: l1
+  activation: ReLU
+  num_gate_layers: 2
+  K: 5
+  p: [0.8, 1.]
+
+elliptic:
+  lr: 0.01
+  wd: 0.0
+  epochs: 500
+  dropout: 0.0
+  hid_dims: [ 128, 128 ]
+  mlp_norm: none
+  feat_trans: no
+  activation: ReLU
+  num_gate_layers: 1
+  K: 5
+  p: [0.5, 0.5]
+
+tolokers:
+  lr: 0.01
+  wd: 0.0
+  epochs: 500
+  dropout: 0.0
+  hid_dims: [ 64, 64 ]
+  mlp_norm: none
+  feat_trans: no
+  activation: ReLU
+  num_gate_layers: 2
+  K: 5
+  p: [0.7, 0.9]
+
+questions:
+  lr: 0.01
+  wd: 0.0
+  epochs: 500
+  dropout: 0.0
+  hid_dims: [ 64, 64 ]
+  mlp_norm: none
+  feat_trans: no
+  activation: ReLU
+  num_gate_layers: 2
+  K: 5
+  p: [0.9, 0.9]
+
+dgraphfin:
+  lr: 0.01
+  wd: 0.000
+  epochs: 500
+  dropout: 0.
+  hid_dims: [ 64, 64 ]
+  mlp_norm: none
+  feat_trans: l1
+  activation: ReLU
+  num_gate_layers: 1
+  K: 5
+  p: [0.5, 0.5]
+
+tsocial:
+  lr: 0.01
+  wd: 0.0
+  epochs: 1000
+  dropout: 0.0
+  hid_dims: [ 128, 128 ]
+  conv_norm: batch
+  mlp_norm: none
+  feat_trans: l1
+  activation: ReLU
+  num_gate_layers: 2
+  K: 3
+  p: [0., 1.]
