@@ -11,7 +11,8 @@ from dataloader import load_data
 from model import SAGAD, precompute_Tx, NodeDimGatedFusion, LowFusion, HighFusion, MeanFusion, ConcatFusion, \
     ScalarVectorFusion, AttentionFusion
 from mrqsampler import mrqsample
-from utils import get_training_config, set_seed, get_logger, metrics
+from feature_missing import apply_missing_features, impute_missing_features
+from utils import get_training_config, set_seed, get_logger, metrics, compute_metrics_from_probs, find_best_threshold
 
 
 def get_args():
@@ -19,8 +20,6 @@ def get_args():
 
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--semi', type=bool, default=True,
-                        help='whether to use semi-supervised learning')
     parser.add_argument('--symm', type=bool, default=True,
                         help='whether to symmetric normalize adjacency matrix')
     parser.add_argument('--num_exp', type=int, default=10,
@@ -127,24 +126,27 @@ def run(conf, Tx_list, X, Y, idx_train, idx_val, idx_test):
     model.load_state_dict(torch.load(f"snapshots/{conf['dataset']}_snapshot.pkl", weights_only=False))
     model.eval()
     with torch.no_grad():
-        Y_test_pred = model(Tx_list_test, X_test).softmax(dim=1)[:, 1]
-        best_test_score = metrics(Y_test, Y_test_pred)
-        auroc, auprc, reck = best_test_score['AUROC'], best_test_score['AUPRC'], best_test_score['RecK']
-        print(f"Test| AUROC={auroc:.2f}, AUPRC={auprc:.2f}, RecK={reck:.2f}")
-    return best_test_score['AUROC'], best_test_score['AUPRC'], best_test_score['RecK']
+        Y_val_prob = model(Tx_list_val, X_val).softmax(dim=1)[:, 1]
+        best_threshold = find_best_threshold(Y_val_prob, Y_val, metric='GMean')
+
+        Y_test_prob = model(Tx_list_test, X_test).softmax(dim=1)[:, 1]
+        test_score = compute_metrics_from_probs(Y_test_prob, Y_test, best_threshold)
+        print(f"Test| ROC-AUC={test_score['ROC-AUC']:.2f}, PR-AUC={test_score['PR-AUC']:.2f}, "
+              f"Macro-F1={test_score['Macro-F1']:.2f}, Fraud-F1={test_score['Fraud-F1']:.2f}, "
+              f"Fraud-Precision={test_score['Fraud-Precision']:.2f}, "
+              f"Fraud-Recall={test_score['Fraud-Recall']:.2f}, GMean={test_score['GMean']:.2f}")
+    return test_score
 
 
 def main():
     args = get_args()
 
-    if args.semi:
-        conf = get_training_config(args.dataset, config_path='semi_train.conf.yaml')
-        log_dir = f'./logs/semi'
-    else:
-        conf = get_training_config(args.dataset, config_path='full_train.conf.yaml')
-        log_dir = f'./logs/full'
+    conf = get_training_config(args.dataset, config_path='semi_train.conf.yaml')
+    log_dir = f'./logs'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+    if not os.path.exists('snapshots'):
+        os.makedirs('snapshots')
     logger = get_logger(f'{log_dir}/{args.dataset}.log')
     conf = dict(args.__dict__, **conf)
     logger.info(str(conf))
@@ -153,31 +155,48 @@ def main():
         if torch.cuda.is_available() else 'cpu'
 
     G, X, Y, train_masks, val_masks, test_masks = (
-        load_data(args.dataset, semi=args.semi, feat_trans=conf['feat_trans']))
-
-    Tx_list= precompute_Tx(G, X, conf['K'], conv_norm=conf['conv_norm'])
+        load_data(args.dataset, feat_trans=conf['feat_trans']))
 
     G_mrq = mrqsample(args.dataset, G, X, one_hop=True)
-    X_nei = dgl.ops.copy_u_mean(G_mrq, X)
-    X = torch.concat([X, X_nei], dim=1)
 
-    X, Y = X.to(device), Y.to(device)
-    Tx_list = [Tx.to(device) for Tx in Tx_list]
+    MISSING_RATIO = 0.995
 
-    AUROCs, AUPRCs, RecKs = [], [], []
+    AUROCs, AUPRCs, MacroF1s, FraudF1s, FraudPrecs, FraudRecs, GMeans = [], [], [], [], [], [], []
     indices = torch.arange(X.shape[0])
-    for i in range(min(args.num_exp, train_masks.shape[1])):
-        if not args.semi:
-            conf['seed'] = i
+    Y = Y.to(device)
+    for i in range(5):
+        conf['seed'] = i
+        set_seed(conf['seed'])
+
+        X_masked = apply_missing_features(X, MISSING_RATIO, seed=conf['seed'])
+        X_masked = impute_missing_features(X_masked, method='zero')
+
+        Tx_list = precompute_Tx(G, X_masked, conf['K'], conv_norm=conf['conv_norm'])
+        X_nei = dgl.ops.copy_u_mean(G_mrq, X_masked)
+        X_final = torch.concat([X_masked, X_nei], dim=1)
+
+        Tx_list = [Tx.to(device) for Tx in Tx_list]
+        X_final = X_final.to(device)
+
         idx_train = indices[train_masks[:, i]]
         idx_val = indices[val_masks[:, i]]
         idx_test = indices[test_masks[:, i]]
-        auroc, auprc, reck = run(conf, Tx_list, X, Y, idx_train, idx_val, idx_test)
-        AUROCs.append(auroc), AUPRCs.append(auprc), RecKs.append(reck)
+        score = run(conf, Tx_list, X_final, Y, idx_train, idx_val, idx_test)
+        AUROCs.append(score['ROC-AUC'])
+        AUPRCs.append(score['PR-AUC'])
+        MacroF1s.append(score['Macro-F1'])
+        FraudF1s.append(score['Fraud-F1'])
+        FraudPrecs.append(score['Fraud-Precision'])
+        FraudRecs.append(score['Fraud-Recall'])
+        GMeans.append(score['GMean'])
 
-    res = (f"Test| AUROC={np.mean(AUROCs):.2f}+-{np.std(AUROCs):.2f}, "
-           f"AUPRC={np.mean(AUPRCs):.2f}+-{np.std(AUPRCs):.2f}, "
-           f"RecK={np.mean(RecKs):.2f}+-{np.std(RecKs):.2f}\n")
+    res = (f"Test| ROC-AUC={np.mean(AUROCs):.2f}+-{np.std(AUROCs):.2f}, "
+           f"PR-AUC={np.mean(AUPRCs):.2f}+-{np.std(AUPRCs):.2f}, "
+           f"Macro-F1={np.mean(MacroF1s):.2f}+-{np.std(MacroF1s):.2f}, "
+           f"Fraud-F1={np.mean(FraudF1s):.2f}+-{np.std(FraudF1s):.2f}, "
+           f"Fraud-Precision={np.mean(FraudPrecs):.2f}+-{np.std(FraudPrecs):.2f}, "
+           f"Fraud-Recall={np.mean(FraudRecs):.2f}+-{np.std(FraudRecs):.2f}, "
+           f"GMean={np.mean(GMeans):.2f}+-{np.std(GMeans):.2f}\n")
 
     logger.info(res)
 

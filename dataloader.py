@@ -10,19 +10,14 @@ def standard_scale(x, dim=0):
     return x
 
 
-def load_data(dataset, semi=True, feat_trans='no'):
+def load_data(dataset, feat_trans='no'):
     """load and preprocess dataset"""
-    g = load_graphs('../datasets/' + dataset)[0][0]
+    g = load_graphs('all_data/' + dataset)[0][0]
     x = g.ndata.pop('feature')
     y = g.ndata.pop('label')
-    if semi:
-        train_masks = g.ndata.pop('train_masks')[:, 10:].bool()
-        val_masks = g.ndata.pop('val_masks')[:, 10:].bool()
-        test_masks = g.ndata.pop('test_masks')[:, 10:].bool()
-    else:
-        train_masks = g.ndata.pop('train_masks')[:, :10].bool()
-        val_masks = g.ndata.pop('val_masks')[:, :10].bool()
-        test_masks = g.ndata.pop('test_masks')[:, :10].bool()
+    train_masks = g.ndata.pop('train_masks')[:, :10].bool()
+    val_masks = g.ndata.pop('val_masks')[:, :10].bool()
+    test_masks = g.ndata.pop('test_masks')[:, :10].bool()
 
     g = dgl.to_bidirected(g)
     g = dgl.remove_self_loop(g)

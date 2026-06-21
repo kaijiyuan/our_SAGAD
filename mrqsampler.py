@@ -266,6 +266,6 @@ if __name__ == '__main__':
     # for dataset in ['reddit', 'weibo', 'amazon', 'yelp', 'tfinance',
     #                              'elliptic', 'tolokers', 'questions', 'dgraphfin', 'tsocial']:
     for dataset in ['reddit']:
-        conf = get_training_config(dataset, config_path='train.conf.yaml')
-        G, X, Y, train_masks, val_masks, test_masks = load_data(dataset, semi=True, feat_trans=conf['feat_trans'])
+        conf = get_training_config(dataset, config_path='semi_train.conf.yaml')
+        G, X, Y, train_masks, val_masks, test_masks = load_data(dataset, feat_trans=conf['feat_trans'])
         mrqsample(dataset, G, X, one_hop=True)
